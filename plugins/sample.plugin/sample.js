@@ -6,7 +6,7 @@
  * This plug-in simply acts as a sample.
  */
 
- /* ============================================================================
+/* ============================================================================
  * # Adding additional behaviour to standard objects.
  * ========================================================================= */
 /**
@@ -15,5 +15,5 @@
  * @return {Array<String>} A new ordered array containing each line.
  */
 String.prototype.lines = function(){
-	return this.split("\n");
+  return this.split("\n");
 }
