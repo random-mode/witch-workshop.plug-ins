@@ -78,15 +78,33 @@ Project.filename = () => {
 };
 
 /**
+ * Loads asynchronously the script which is located at the given `path`.
+ * @param {String} `path` the script's path (under the `js/plugins` directory)
+ * @param {Function()} `loaded_callback` the function to invoke once the script has been loaded
+ */
+Project.load_script = path => loaded_callback => {
+  const url = `${PluginManager._path}/${path}`;
+  const node = document.createElement('script');
+  node.type = 'text/javascript';
+  node.src = url;
+  node.async = false;
+  node.onerror = loaded_callback;
+  node.onload = loaded_callback;
+  document.body.appendChild(node);
+};
+
+/**
  * Short-hand to constructs a new plugin representation (as used in `plugins.list.js`).
  * @param {String} `name` the plugin's short name
  * @param {String} `source` the plugin's main script's location
+ * @param {Array<String>} `dependencies` the list of plugin's dependencies (paths to additional `.js` to load)
  * @eturn the structure which holds one plugin's information.
  */
-Project.Plugin = (name, source) => {
+Project.Plugin = (name, source, dependencies = []) => {
   return {
     name: name,
     source: source,
+    dependencies: dependencies,
   };
 };
 
@@ -104,6 +122,7 @@ Project.Plugin = (name, source) => {
   );
   const plugins_list_src = `${plugins_dir}/plugins.list.js`;
 
+  // Loaders
   const load_main_script = plugin => callback_once_loaded => {
     const src = `${plugins_dir}/${plugin.source}`;
     console.log(
@@ -114,14 +133,31 @@ Project.Plugin = (name, source) => {
     Project.load_script(src)(callback_once_loaded);
   };
 
+  const load_dependency = dependency_sub_path => callback_once_loaded => {
+    const src = `${plugins_dir}/${dependency_sub_path}`;
+    console.log(...Project.log.format(`Loading plugin's dependency: (${src})`));
+    Project.load_script(src)(callback_once_loaded);
+  };
+
   const load_plugin = plugin => callback_once_loaded => {
     return () => {
       Project.log.group(`Loading project's plugin: ${plugin.name}`)(
         end_plugin_group => {
-          load_main_script(plugin)(() => {
-            end_plugin_group();
-            callback_once_loaded();
-          });
+          Project.log.group(`Loading dependencies for: ${plugin.name}`)(
+            end_dependencies_group => {
+              plugin.dependencies.reverse().reduce(
+                (Σ, dependency_sub_path) =>
+                  load_dependency(dependency_sub_path)(Σ),
+                () => {
+                  end_dependencies_group();
+                  load_main_script(plugin)(() => {
+                    end_plugin_group();
+                    callback_once_loaded();
+                  });
+                }
+              );
+            }
+          );
         }
       );
     };
@@ -150,6 +186,7 @@ Project.Plugin = (name, source) => {
     };
   };
 
+  // Plugin's entry point
   Project.log.group_rmex(
     `Loading file containing the list of project's plugins: ${plugins_dir}/plugins.list.js`
   )(end_log_group => {

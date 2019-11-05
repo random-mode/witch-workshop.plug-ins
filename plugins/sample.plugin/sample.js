@@ -23,6 +23,10 @@ String.prototype.lines = function() {
 };
 
 // Immediately Invoked Function Expression (IIFE) for illustration purposes
+// (It actually demonstrates that plugin's dependencies are loaded before the main script.
+//  If it wasn't, `random__range` could not be invoked)
 (function() {
-  console.log(`[#${Project.filename()}] I am a sample script`);
+  console.log(
+    `[#${Project.filename()}] I am a sample script: ${random__range(0)(100)}`
+  );
 })();
