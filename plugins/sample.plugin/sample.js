@@ -1,9 +1,13 @@
+'use strict';
+
 /*:
  * @plugindesc
  * Sample plug-in
  *
+ * @author acs-l
+ *
  * @help
- * This plug-in simply acts as a sample.
+ * This plug-in serves as a basic illustration of the integration's process.
  */
 
 /* ============================================================================
@@ -14,6 +18,11 @@
  * in order to extract its lines as cells of an ordered array.
  * @return {Array<String>} A new ordered array containing each line.
  */
-String.prototype.lines = function(){
-  return this.split("\n");
-}
+String.prototype.lines = function() {
+  return this.split('\n');
+};
+
+// Immediately Invoked Function Expression (IIFE) for illustration purposes
+(function() {
+  console.log(`[#${Project.filename()}] I am a sample script`);
+})();
