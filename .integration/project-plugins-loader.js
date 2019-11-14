@@ -139,25 +139,32 @@ Project.Plugin = (name, source, dependencies = []) => {
     Project.load_script(src)(callback_once_loaded);
   };
 
+  const load_plugin_dependencies = plugin => callback_once_loaded => {
+    Project.log.group(`Loading dependencies for: ${plugin.name}`)(
+      end_dependencies_group => {
+        plugin.dependencies.reverse().reduce(
+          (next_dependency_loader, dependency_sub_path) =>
+            load_dependency(dependency_sub_path)(next_dependency_loader),
+          () => {
+            end_dependencies_group();
+            callback_once_loaded();
+          }
+        );
+      }
+    );
+  };
+
   const load_plugin = plugin => callback_once_loaded => {
     return () => {
       Project.log.group(`Loading project's plugin: ${plugin.name}`)(
         end_plugin_group => {
-          Project.log.group(`Loading dependencies for: ${plugin.name}`)(
-            end_dependencies_group => {
-              plugin.dependencies.reverse().reduce(
-                (next_dependency_loader, dependency_sub_path) =>
-                  load_dependency(dependency_sub_path)(next_dependency_loader),
-                () => {
-                  end_dependencies_group();
-                  load_main_script(plugin)(() => {
-                    end_plugin_group();
-                    callback_once_loaded();
-                  });
-                }
-              );
-            }
-          );
+          load_plugin_dependencies(plugin)(() => {
+            load_main_script(plugin)(() => {
+              end_plugin_group();
+              callback_once_loaded();
+            });
+            end_plugin_group();
+          });
         }
       );
     };
