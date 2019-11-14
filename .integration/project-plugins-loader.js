@@ -146,8 +146,8 @@ Project.Plugin = (name, source, dependencies = []) => {
           Project.log.group(`Loading dependencies for: ${plugin.name}`)(
             end_dependencies_group => {
               plugin.dependencies.reverse().reduce(
-                (Σ, dependency_sub_path) =>
-                  load_dependency(dependency_sub_path)(Σ),
+                (next_dependency_loader, dependency_sub_path) =>
+                  load_dependency(dependency_sub_path)(next_dependency_loader),
                 () => {
                   end_dependencies_group();
                   load_main_script(plugin)(() => {
@@ -167,7 +167,7 @@ Project.Plugin = (name, source, dependencies = []) => {
     return () => {
       if (Array.isArray(Project.plugins)) {
         Project.plugins.reverse().reduce(
-          (Σ, p) => load_plugin(p)(Σ),
+          (next_plugin_loader, p) => load_plugin(p)(next_plugin_loader),
           () => {
             console.log(
               ...Project.log.format("Project's plugins load is complete")
