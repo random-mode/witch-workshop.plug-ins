@@ -1,0 +1,203 @@
+﻿'use strict';
+
+/*:
+ * @plugindesc
+ * Loads project's specific plugins.
+ *
+ * @author acs-l
+ *
+ * @param Plugins' directory
+ * @desc Path to the directory where plugins'-being-developed are stored
+ * Default value: witch-workshop.plug-ins/plugins
+ * @default witch-workshop.plug-ins/plugins
+ */
+
+const Project = {};
+
+/**
+ * Logging utilitary
+ */
+Project.log = (() => {
+  const format_digits = nb_min_digits => x =>
+    x.toLocaleString('en-US', {
+      minimumIntegerDigits: nb_min_digits,
+      useGrouping: false,
+    });
+
+  const get_time = () => {
+    const d = new Date();
+    const hours = format_digits(2)(d.getHours());
+    const minutes = format_digits(2)(d.getMinutes());
+    const seconds = format_digits(2)(d.getSeconds());
+    const milliseconds = format_digits(3)(d.getMilliseconds());
+
+    return `${hours}:${minutes}:${seconds}:${milliseconds}`;
+  };
+
+  const rmex_formatter = message => {
+    return [
+      `%c[${get_time()}] %cRMEx %c ${message}`,
+      'background: #113F59; color: #F3EDD3; padding:4px 0px 4px 4px; border-radius: 5px 0px 0px 5px;',
+      'background: #113F59; color: #19BEC0; font-weight: bold; padding: 4px 2px 4px; border-radius: 0px 5px 5px 0px;',
+      'color: inherit; background: inherit; padding: inherit;',
+    ];
+  };
+
+  const format = message => {
+    return [
+      `%c[${get_time()}]%c ${message}`,
+      'font-size: 0.9em; font-family: monospace; opacity: 0.8;',
+      'color: inherit; background: inherit; padding: inherit;',
+    ];
+  };
+
+  const group = label_formatter => group_label => f => {
+    console.group(...label_formatter(group_label));
+    f(() => console.groupEnd());
+  };
+
+  return {
+    format: format,
+    group: group(format),
+    group_rmex: group(rmex_formatter),
+  };
+})();
+
+/**
+ * Returns the filename of the current script (i.e.: the one which is invoking this function).
+ * @return {String} the current script's filename.
+ */
+Project.filename = () => {
+  const scripts = document.getElementsByTagName('script');
+  const path = scripts[scripts.length - 1].src;
+  const filename = path.substring(
+    path.lastIndexOf('/') + 1,
+    path.lastIndexOf('.')
+  );
+  return filename;
+};
+
+/**
+ * Loads asynchronously the script which is located at the given `path`.
+ * @param {String} `path` the script's path (under the `js/plugins` directory)
+ * @param {Function()} `loaded_callback` the function to invoke once the script has been loaded
+ */
+Project.load_script = path => loaded_callback => {
+  const url = `${PluginManager._path}/${path}`;
+  const node = document.createElement('script');
+  node.type = 'text/javascript';
+  node.src = url;
+  node.async = false;
+  node.onerror = loaded_callback;
+  node.onload = loaded_callback;
+  document.body.appendChild(node);
+};
+
+/**
+ * Short-hand to constructs a new plugin representation (as used in `plugins.list.js`).
+ * @param {String} `name` the plugin's short name
+ * @param {String} `source` the plugin's main script's location
+ * @param {Array<String>} `dependencies` the list of plugin's dependencies (paths to additional `.js` to load)
+ * @eturn the structure which holds one plugin's information.
+ */
+Project.Plugin = (name, source, dependencies = []) => {
+  return {
+    name: name,
+    source: source,
+    dependencies: dependencies,
+  };
+};
+
+// Plug-in's setup
+(function(context) {
+  // Parameters' formatter
+  const string = default_value => current_value => {
+    return (current_value || '').trim() || default_value;
+  };
+
+  // Parameters' retrieval
+  const parameters = PluginManager.parameters(Project.filename());
+  const plugins_dir = string('witch-workshop.plug-ins/plugins')(
+    parameters["Plugins' directory"]
+  );
+  const plugins_list_src = `${plugins_dir}/plugins.list.js`;
+
+  // Loaders
+  const load_main_script = plugin => callback_once_loaded => {
+    const src = `${plugins_dir}/${plugin.source}`;
+    console.log(
+      ...Project.log.format(
+        `Loading main script of project's plugin: ${plugin.name} (${src})`
+      )
+    );
+    Project.load_script(src)(callback_once_loaded);
+  };
+
+  const load_dependency = dependency_sub_path => callback_once_loaded => {
+    const src = `${plugins_dir}/${dependency_sub_path}`;
+    console.log(...Project.log.format(`Loading plugin's dependency: (${src})`));
+    Project.load_script(src)(callback_once_loaded);
+  };
+
+  const load_plugin_dependencies = plugin => callback_once_loaded => {
+    Project.log.group(`Loading dependencies for: ${plugin.name}`)(
+      end_dependencies_group => {
+        plugin.dependencies.reverse().reduce(
+          (next_dependency_loader, dependency_sub_path) =>
+            load_dependency(dependency_sub_path)(next_dependency_loader),
+          () => {
+            end_dependencies_group();
+            callback_once_loaded();
+          }
+        );
+      }
+    );
+  };
+
+  const load_plugin = plugin => callback_once_loaded => {
+    return () => {
+      Project.log.group(`Loading project's plugin: ${plugin.name}`)(
+        end_plugin_group => {
+          load_plugin_dependencies(plugin)(() => {
+            load_main_script(plugin)(() => {
+              end_plugin_group();
+              callback_once_loaded();
+            });
+            end_plugin_group();
+          });
+        }
+      );
+    };
+  };
+
+  const load_plugins_synchronously = callback_once_finished => {
+    return () => {
+      if (Array.isArray(Project.plugins)) {
+        Project.plugins.reverse().reduce(
+          (next_plugin_loader, p) => load_plugin(p)(next_plugin_loader),
+          () => {
+            console.log(
+              ...Project.log.format("Project's plugins load is complete")
+            );
+            callback_once_finished();
+          }
+        )();
+      } else {
+        console.log(
+          ...Project.log.format(
+            `${plugins_list_src}#Project.Plugin is wrongly formatted!`
+          )
+        );
+        callback_once_finished();
+      }
+    };
+  };
+
+  // Plugin's entry point
+  Project.log.group_rmex(
+    `Loading file containing the list of project's plugins: ${plugins_dir}/plugins.list.js`
+  )(end_log_group => {
+    const load_plugins = load_plugins_synchronously(end_log_group);
+    Project.load_script(plugins_list_src)(load_plugins);
+  });
+})(this);
